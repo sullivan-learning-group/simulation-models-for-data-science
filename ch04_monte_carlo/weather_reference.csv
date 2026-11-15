@@ -1,0 +1,5 @@
+weather_category,historical_frequency,customer_impact,description
+sunny,0.4,Baseline,"Clear skies, comfortable temperature"
+cloudy,0.3,~8% reduction,"Overcast but dry, mild conditions"
+rainy,0.22,~22% reduction,Rain or steady drizzle throughout the day
+extreme,0.08,~45% reduction,"Severe weather: heavy storms, ice, extreme heat/cold"

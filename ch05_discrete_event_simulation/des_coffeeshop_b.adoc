@@ -1,0 +1,77 @@
+[[des_coffeeshop_b]]
+=== DES Specification B: Coffee Shop Code Generation Prompt
+
+This is the completed DES Template B for the coffee shop staffing simulation in Chapter 5. It was used with Claude Opus 4.6 to generate _coffee_shop_des.py_.
+
+....
+Generate a discrete event simulation in Python using SimPy based
+on the following spec.
+
+===============================================================
+PROCESS AND RESOURCE SPEC
+===============================================================
+  *** Omitted for brevity. The contents of DES Specification A
+      goes here ***
+
+===============================================================
+TECHNICAL REQUIREMENTS
+===============================================================
+
+Libraries: simpy, numpy, scipy.stats, pandas, matplotlib
+Random seed: 42 (base seed; increment per replication)
+Store per-replication summary statistics in a DataFrame
+
+===============================================================
+CODE ARCHITECTURE
+===============================================================
+
+Organize the code into these functions:
+
+. entity_process(env, name, resources, metrics)
+   - The entity lifecycle from arrival through departure
+   - Implement balking/reneging logic
+   - Record wait time, service time, total time in system
+
+. entity_generator(env, resources, metrics)
+   - Generates entity arrivals with time-varying rates
+   - Assigns entity attributes (e.g., order type)
+
+. run_single_replication(scenario, seed)
+   - Creates SimPy environment and resources
+   - Runs one complete simulation
+   - Returns per-entity metrics as a DataFrame
+
+. run_scenario(scenario, n_replications)
+   - Outer loop over replications
+   - Collects per-replication summary stats
+   - Returns summary DataFrame with confidence intervals
+
+. compare_scenarios(results_dict)
+   - Side-by-side comparison table
+   - 95% confidence intervals for each KPI
+   - Visualization functions
+
+===============================================================
+REQUIRED OUTPUTS
+===============================================================
+
+Per-replication statistics:
+- Mean wait time, P50 wait time, P90 wait time
+- Walkaway count and rate
+- Resource utilization (fraction of time busy)
+- Total entities served
+
+Cross-replication statistics:
+- Mean and 95% CI for each metric above
+- Min and max across replications
+
+Plots:
+- Queue length over time (single representative run)
+- Wait time histogram by scenario
+- Scenario comparison bar chart with error bars
+- Resource utilization by time window
+
+Optional (include if relevant):
+- Utilization heatmap by time-of-day and scenario
+- Walkaway rate vs. queue threshold sensitivity
+....

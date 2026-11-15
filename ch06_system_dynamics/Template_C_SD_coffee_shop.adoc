@@ -1,0 +1,365 @@
+= Coffee Shop Example: Completed SD Template C
+
+24-month horizon, 0.1 month reporting interval, discontinuities at months 1.0 and 1.1.
+
+'''
+
+== Section 1: Structural Validation
+
+----
+All important feedback loops represented?          Y
+Any spurious loops included?                       N
+Stock definitions match real accumulations?        Y
+Delay estimates reasonable?                        Y
+Boundary matches expert's mental model?            Y — competitor response
+                                                   left exogenous, no seasonal loop
+Archetype still fits?                              Y — limits to growth (R1 + B1),
+                                                   B2 as external lever
+Which constraint binds, and for how much
+of the horizon?                                    Staff capacity, 100% of horizon,
+                                                   all four scenarios
+Domain expert sign-off:                            Owner, [date]
+----
+
+The 4 FTE staffing ceiling caps capacity at 520 customers/month. Upgraded
+equipment would support 700, so the `min()` never selects the equipment side and
+the throughput half of the $15,000 is unusable.
+
+'''
+
+== Section 2: Dimensional Consistency
+
+[options="header"]
+|===
+|Equation |Left Side Units |Right Side Units |Consistent?
+
+|acquisition_rate = base_acquisition_effective + acquisition_from_wom |customers/month |customers/month |Y
+|churn_rate = customer_base × churn_fraction |customers/month |customers × 1/month |Y
+|word_of_mouth = customer_base × satisfaction × wom_coefficient |leads/month |customers × 1 × leads/customer/month |Y
+|staff_capacity = staff_fte × customers_per_fte |customers/month |FTE × customers/month/FTE |Y
+|utilization = customer_base / capacity |dimensionless |customers / (customers/month) |N, see note
+|revenue_inflow = customer_base × visits_per_month × avg_transaction |USD/month |customers × visits/customer/month × USD/visit |Y
+|d(brand_reputation)/dt = (reputation_target − brand_reputation) / reputation_delay |index/month |index/month |Y
+|===
+
+
+*Utilization note.* `customer_base` stands in for monthly demand at a fixed 4.0
+visits/customer/month. Valid only while visit frequency holds; listed as a
+limitation.
+
+*Time-unit check.* All delays converted weeks to months before `solve_ivp`:
+6 → 1.39, 8 → 1.85, 3 → 0.69. Asserted in code.
+
+*Initialization check.* Two failures caught here.
+
+[options="header"]
+|===
+|Stock |Problem |Fix
+
+|brand_reputation |Starts at 55, target is 76.5, so it climbs on its own; baseline reaches 449 customers and $1,222/month net cash, failing two reference rows |Start at 76.5
+|wom_smoothed |Starting at zero produces a spurious 6-week dip in every run |Start at equilibrium, 4.6 customers/month
+|===
+
+
+'''
+
+== Section 3: Extreme Condition Tests
+
+[options="header"]
+|===
+|Test |Setting |Expected |Observed |Pass?
+
+|No acquisition |base_acquisition = 0, wom_coefficient = 0 |Decays toward zero |400 → 95 |Y
+|No churn |base_churn = 0 |Grows without bound |400 → 859, still climbing |Y
+|Zero delay |all delays → 0 |Immediate steady state |Settles by month 0.2; Scenario A 446.7 vs 447.0 |Y
+|Extreme price hike |price_change = +100% |Rapid customer loss |400 → 124 |Y
+|Infinite capacity |wait_time_pressure = 0 |B1 inactive, R1 dominates |Scenario A 510 vs 447 |Y
+|===
+
+
+No-churn growth is linear, not exponential, because B1 saturates and caps the
+inflow.
+
+'''
+
+== Section 4: Behavioral Validation Against Reference Modes
+
+[options="header"]
+|===
+|Reference quantity |Required |Baseline produced |Pass?
+
+|Customer base |Within 10% of 400 through month 24 |400 to 402 |Y
+|Monthly revenue |$8,500 to $10,000 |$8,840 |Y
+|Net cash flow |+$500 to $800/month |$740/month |Y
+|Acquisition vs churn at t = 0 |Within 2/month |24.6 vs 24.3 |Y
+|===
+
+
+All four pass only after the `brand_reputation` fix in section 2.
+
+----
+Reference mode 1
+  Pattern:              Traffic dipped after the March price increase,
+                        then partially recovered
+  Triggering inputs:    price_change = +10% at t = 0
+  Observed outcome:     Traffic down ~8% by June, 3-month lag
+  Model prediction:     Scenario B down 8.5% at month 3, 400 → 366 by month 12
+  Qualitative match?    Y
+  Quantitative match?   Y, within 20%
+----
+
+No second historical reference mode available.
+
+'''
+
+== Section 5: Expected vs. Observed Loop Dominance
+
+Measured on Scenario A.
+
+[options="header"]
+|===
+|Phase |Expected |Observed |Match?
+
+|Months 0 to 6 |R1 |+21.3 customers; wait pressure 0.055 → 0.172 |Y
+|Months 6 to 18 |R1, weakening |+23.0 customers; wait pressure 0.172 → 0.299 |Y
+|Months 18 to 24 |B1 at parity |+2.6 customers; wait pressure 0.299 → 0.313 |Y
+|===
+
+
+The prediction holds only at a 4 FTE ceiling. At 5 FTE the staffing rule holds
+utilization near 0.77 for the whole run, wait pressure never exceeds 0.074, and
+disabling B1 moves the endpoint by 18 customers. B1 is present but inert.
+
+'''
+
+== Section 6: Structural Parameter Review
+
+[options="header"]
+|===
+|Structural parameter |Value |Effect across plausible range
+
+|brand_reputation initial |76.5 |At 55, baseline gains 47 customers and fails the reference check
+|reference_reputation |76.5 |Fixed by the above; the two must match
+|retention_strength |0.8 |0.5 to 1.1 moves Scenario A from 432 to 460
+|satisfaction_reference |0.60 |Fixed; re-baselines every churn result
+|w_equipment / w_staff |0.65 / 0.35 |Not swept; tests structure, not parameters
+|wait_time_pressure ramp |start 0.75, width 0.35 |Disabling lifts Scenario A by 63 customers
+|reputation scaling |reputation / 76.5 |Freezing the loop costs 13 customers
+|===
+
+
+*Verdict:* the conclusion rests on the wait-pressure ramp location and the
+reputation initialization. Neither is measured. The remaining weights matter less
+than the behavioral parameters in section 7.
+
+'''
+
+== Section 7: Sensitivity Analysis
+
+=== 7a. One-at-a-time
+
+Output: Scenario A customer base at month 24. Base 447.
+
+[options="header"]
+|===
+|Parameter |Low |High |Output @ Low |Output @ High |Swing |Rank
+
+|base_acquisition |12 |28 |358.5 |498.2 |139.7 |1
+|customers_per_fte |110 |150 |399.0 |487.5 |88.5 |2
+|base_churn |0.055 |0.085 |489.8 |412.4 |77.4 |3
+|target_load_per_fte |85 |120 |447.0 |390.5 |56.4 |4
+|wom_coefficient |0.03 |0.10 |428.2 |471.4 |43.2 |5
+|retention_strength |0.5 |1.1 |432.2 |459.5 |27.3 |6
+|conversion_rate |0.18 |0.32 |436.5 |457.3 |20.8 |7
+|wom_delay |0.92 mo |1.85 mo |447.0 |446.9 |0.0 |8
+|price_sensitivity |0.8 |2.5 |447.0 |447.0 |0.0 |9
+|value_sensitivity |1.0 |3.0 |447.0 |447.0 |0.0 |10
+|===
+
+
+*Key driver:* `base_acquisition`, walk-in traffic, which the model treats as
+exogenous. Two capacity parameters follow, the signature of a system at its
+ceiling. `target_load_per_fte` is asymmetric because staffing already clips to
+the ceiling below 100. The two price parameters read zero because Scenario A
+holds price flat.
+
+=== 7b. Global sensitivity
+
+----
+Method:            Sobol, first-order and total-order
+Runs:              5,632 parameter sets (SALib, N = 512), each run twice
+Parameters varied: base_acquisition, target_load_per_fte, customers_per_fte,
+                   wom_coefficient, conversion_rate, base_churn,
+                   price_sensitivity, wom_delay, retention_strength
+OAT top-five
+missing from set?  N. An earlier six-parameter set omitted OAT ranks 1, 2, and 4
+----
+
+[options="header"]
+|===
+|Parameter |ST, customer base @ 24 mo |ST, payback month
+
+|base_acquisition |0.457 |0.451
+|customers_per_fte |0.237 |0.656
+|base_churn |0.192 |0.144
+|target_load_per_fte |0.087 |0.313
+|wom_coefficient |0.058 |0.229
+|retention_strength |0.024 |0.274
+|conversion_rate |0.017 |0.079
+|wom_delay |0.000 |0.004
+|price_sensitivity |0.000 |0.000
+|===
+
+
+Customer base: mean 432, p10 335, p90 514. Payback month: mean 31.9, p10 21.9,
+p90 36.0, with non-payback coded as 36.
+
+`base_acquisition` drives the level; `customers_per_fte` drives the timing. The
+decision is a timing decision. Scenario A beats its baseline on customers in
+*100%* of runs and fails to pay back within 24 months in *70%*. `wom_delay`
+is zero on both outputs.
+
+=== 7c. Structural sensitivity
+
+Output: Scenario A customer base at month 24. Base 447.0.
+
+[options="header"]
+|===
+|Loop |Variation |Result |Interpretation
+
+|R1 |wom_coefficient × 0.5 |428.2 (−18.8) |Word of mouth is real, not the engine
+|R1 |wom_coefficient × 2.0 |483.3 (+36.4) |
+|R1 |Disabled |409.1 (−37.8) |Contributes 38 of the 45-customer gain
+|R1 reputation arm |reputation_delay → ∞ |434.4 (−12.6) |About a third of the word-of-mouth path
+|B1 |Disabled |509.6 (+62.6) |The active brake
+|B1 |Disabled, ceiling lifted |509.6 (+62.6) |Ceiling acts only through B1
+|B2 |Disabled in Scenario C |447.0 |Exactly Scenario A
+|===
+
+
+*Structural finding:* B1 does more work than R1. Growth running into a staffing
+wall, not an equipment wall.
+
+'''
+
+== Section 8: Scenario Comparison
+
+[options="header"]
+|===
+|Metric |Baseline |A: Invest |B: Price |C: Both
+
+|Customers @ 6 mo |401 |421 |382 |405
+|Customers @ 12 mo |402 |438 |366 |411
+|Customers @ 24 mo |402 |447 |346 |415
+|Monthly revenue @ 24 mo |$8,840 |$9,833 |$8,370 |$10,031
+|Cash reserves @ 24 mo |$42,749 |$38,151 |$43,726 |$43,909
+|Cumulative net cash @ 24 mo |$17,749 |$13,151 |$18,726 |$18,909
+|Utilization @ 24 mo |0.773 |0.860 |0.767 |0.797
+|Capacity @ 24 mo |520 |520 |451 |520
+|Investment payback month |— |*none within 24 months* |— |*22.6*
+|===
+
+
+Stochastic envelope, 600 iterations, customer base at month 24:
+
+[options="header"]
+|===
+|Scenario |p10 |Median |p90
+
+|Baseline |341 |402 |441
+|A: Invest |407 |447 |488
+|B: Price |288 |346 |411
+|C: Both |355 |413 |455
+|===
+
+
+*Crossovers.* Both investment scenarios pass baseline on customers within the
+first reporting interval after the upgrade. Cash is slower: Scenario A is $4,598
+behind baseline at month 24, having recovered $10,402 of $15,000, and is closing
+at roughly $650/month. Extending to 36 months puts the crossing at month 31; that
+figure is a diagnostic, since nothing validates the model past month 24.
+
+*Policy resistance check.*
+
+----
+Combined scenario underperforms its
+single-lever constituents?          Y, on customer base
+Which scenario and loop?            Scenario C ends 32.5 customers below
+                                    Scenario A (415 vs 447). Setting
+                                    price_sensitivity and value_sensitivity
+                                    to zero in C returns exactly 447.0,
+                                    confirming B2
+----
+
+B2 reaches churn within weeks. R1 must clear an 8-week reputation smooth and a
+6-week word-of-mouth smooth first. On cash the resistance reverses: C beats A by
+$5,758.
+
+'''
+
+== Section 9: Results Summary
+
+*One-Paragraph Finding*
+
+----
+The equipment upgrade grows the customer base from 400 to 447 over two
+years but does not pay for itself in that window. At month 24 the shop
+is $4,598 behind where it would have been without the purchase.
+Growth is front-loaded and stops after month 18, because the shop runs
+out of baristas before it runs out of demand: four staff cap throughput
+at 520 customers a month while the new equipment could serve 700.
+Adding the 10% price increase pays back at month 22.6 but costs 32
+customers, because price reaches churn within weeks while the quality
+improvement takes two to three months to reach new customers.
+----
+
+*Key Numbers*
+
+[options="header"]
+|===
+|Metric |Value |What It Means
+
+|Best for customer base |A: Invest, 447 @ 24 mo |Highest growth, worst cash
+|Best for cash |C: Invest + price, $18,909 |Only scenario that pays back in horizon
+|Payback, Scenario A |None within 24 months |$10,402 of $15,000 recovered
+|Payback, Scenario C |Month 22.6 |Margin arrives before customer loss
+|Sensitivity risk |70% of runs show no payback in 24 months |Growth robust at 100%, payback is not
+|Top driver, level |base_acquisition, ST 0.457 |Walk-in traffic, exogenous
+|Top driver, timing |customers_per_fte, ST 0.656 |Barista productivity sets payback
+|Policy resistance flag |Y |Scenario C, loop B2
+|===
+
+
+*Recommendation*
+
+----
+Treat this as a two-to-three year investment. The purchase grows the
+customer base in 100% of sampled parameter combinations but clears its
+cost inside 24 months in only 30%. If the money must return within two
+years, pairing it with the 10% price increase is the only scenario that
+gets there, at a cost of 32 customers and a weaker word-of-mouth
+position in year three.
+
+Price the staffing constraint before committing. Four baristas cap the
+shop at 520 customers a month against equipment rated for 700, so about
+a third of what the $15,000 buys cannot be used, and barista
+productivity is the largest single driver of when payback lands.
+----
+
+*Limitations*
+
+----
+- No competitor response. base_acquisition is exogenous and the largest
+  driver of the result.
+- No seasonal variation.
+- Utilization assumes a fixed 4.0 visits/customer/month.
+- Two unmeasured structural parameters carry the conclusion: the
+  wait-pressure ramp at utilization 0.75 and the brand_reputation
+  initialization at 76.5.
+- The word-of-mouth delay has no measurable effect on either output
+  (Sobol total-order 0.000) despite three sections of specification.
+- A fifth barista is not modeled. Raising max_fte to 5 reaches 492
+  customers but omits the added payroll.
+- Deterministic core. Variability appears only through the stochastic
+  wrapper.
+----

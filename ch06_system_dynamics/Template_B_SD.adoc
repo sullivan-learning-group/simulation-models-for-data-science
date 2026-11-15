@@ -1,0 +1,186 @@
+= SD Template B: Code Generation Prompt
+
+Paste your completed SD Template A into this prompt and hand it to your AI
+assistant.
+
+*Key difference from MC and DES Template B:* Requests an ODE-based model
+function compatible with `solve_ivp` rather than a sampling loop (MC) or SimPy
+event-driven code (DES). Scenario comparison involves parameter sweeps rather
+than replication-based confidence intervals.
+
+Template A carries the numbers, so this prompt no longer has to say "pick
+reasonable values." Sections 9 through 16 of the spec map onto specific
+functions below, and the generator should refuse to invent a value that the spec
+doesn't supply. If something is missing, the right response is to name the gap,
+not to fill it.
+
+----
+Generate a system dynamics simulation in Python based on the
+following spec.
+
+===============================================================
+SYSTEM STRUCTURE SPEC
+===============================================================
+
+[Paste completed SD Template A here]
+
+===============================================================
+TECHNICAL REQUIREMENTS
+===============================================================
+
+Libraries: scipy (solve_ivp), numpy, pandas, matplotlib
+Optional: SALib, for global sensitivity analysis
+
+Build every parameter from the spec. Do not invent values.
+If the spec omits a value the code needs, stop and report the
+gap rather than choosing a number.
+
+Implement all delays as additional state variables in the ODE
+system using first-order exponential smoothing:
+  d(smoothed)/dt = (input - smoothed) / delay_time
+
+Delay time constants must be in the model time unit declared in
+section 2. Convert any duration the spec states in another unit
+before it reaches solve_ivp.
+
+Apply every clip, floor, and ceiling from section 11 at the
+point the quantity is computed, not afterward.
+
+===============================================================
+CODE ARCHITECTURE
+===============================================================
+
+Organize the code into these functions:
+
+1. default_params()
+   - Returns a dictionary built directly from the section 9
+     tables, one key per row, using the spec's exact parameter
+     names
+   - Includes the delay durations from section 13, already
+     converted to the model time unit
+   - Includes the exogenous inputs from section 15 as keys with
+     their baseline (no-policy) values, so a scenario is a
+     dictionary update rather than a code change
+
+2. initial_state(params)
+   - Returns the initial state vector from the section 6 stock
+     table plus one entry per delay stock from section 13
+   - Every delay stock starts at the equilibrium value the spec
+     gives it, never at zero
+   - Every stock driven toward a target starts at that target
+     under baseline inputs, so the baseline does not drift on
+     its own
+
+3. system_model(t, state, params)
+   - The ODE function defining all stock derivatives
+   - Takes current state vector and parameter dictionary
+   - Returns derivatives for every stock, including delay stocks
+
+4. compute_auxiliaries(state, params, t)
+   - Calculates every auxiliary in section 8 from current stock
+     values, in dependency order
+   - Implements the functional forms and anchor points from
+     section 10 exactly as written, including their clips
+   - Called by system_model at each integration step
+
+5. breakpoints(params, t_span)
+   - Returns the sorted discontinuity times from section 2 and
+     section 15, clipped to the horizon
+
+6. run_scenario(params, t_span, initial_state)
+   - Integrates segment by segment between the breakpoints, so
+     every step and pulse edge lands on a segment boundary
+     rather than inside one
+   - Inside a segment shorter than the reporting interval, holds
+     max_step to a quarter of the segment width
+   - Returns a time-series DataFrame with all stocks and
+     auxiliaries at each reporting time, plus cumulative revenue,
+     cumulative expenses, and cumulative net cash
+
+7. check_reference_behavior(baseline_df)
+   - Tests the baseline run against every row of the section 3
+     table
+   - Prints a pass or fail line per row and returns False if any
+     row fails
+   - Call this before any scenario comparison. A baseline that
+     misses its reference mode invalidates everything downstream
+
+8. compare_scenarios(scenario_dict)
+   - Runs all scenarios from section 18
+   - Generates overlay time-series plots for each stock
+   - Produces a summary comparison table at the key time points
+   - Reports the payback month for each investment scenario as
+     the first time its cumulative net cash advantage over the
+     baseline turns positive, and reports "none within horizon"
+     rather than extrapolating
+
+9. sensitivity_sweep(base_params, param_name, values)
+   - Sweeps a single parameter across its section 9 plausible
+     range with all others held constant
+   - Returns key outputs at each value
+   - Generates a parameter sweep plot
+   - Run this for every parameter in section 9 that has a range,
+     then rank by swing
+
+10. global_sensitivity(base_params, problem, n)
+    - Uses the section 16 bounds as the SALib problem definition
+    - Returns first-order and total-order Sobol indices for each
+      output of interest
+    - Verify that the sampled set covers the parameters the OAT
+      sweep ranked highest. A parameter that dominates OAT and is
+      missing here means the global analysis is measuring the
+      wrong thing
+
+11. stochastic_run(base_params, t_span, initial_state,
+                   n_iterations, random_params)
+    - Wraps the deterministic ODE in a Monte Carlo loop
+    - On each iteration, samples random_params from the
+      distributions given in section 16
+    - Returns a long-form DataFrame indexed by iteration and time
+    - Generates a median trajectory and percentile envelope
+      (10th/90th) per scenario
+
+12. structural_sensitivity(base_params)
+    - Re-runs the model with each loop weakened, strengthened,
+      and disabled, by setting the coupling parameter the spec
+      names for that loop
+    - Returns the change in the key output for each variation
+    - This is the input to Template C section 5c
+
+===============================================================
+REQUIRED OUTPUTS
+===============================================================
+
+Reference behavior check:
+- Pass or fail per row of section 3, printed before anything else
+
+Time-series data:
+- All stock values at each reporting time
+- Every auxiliary in section 8, especially satisfaction,
+  utilization, and whichever variable drives the balancing loop
+- Cumulative revenue, expenses, and net cash per scenario
+
+Plots:
+- Stock trajectories over time for each scenario (overlaid)
+- Scenario comparison with crossover points annotated
+- Sensitivity sweep for the top 3 parameters by swing
+
+Summary table:
+- Key outputs at the reporting milestones for each scenario
+- Investment payback month, or "none within horizon"
+- Equilibrium values, if the system reaches steady state
+- Which constraint from section 11 binds, and for what fraction
+  of the horizon
+
+Loop dominance:
+- The section 12 expected dominance table alongside what the run
+  actually produced, phase by phase
+- Report a mismatch as a finding rather than reconciling it
+
+Optional (include if relevant):
+- Phase plot (stock A vs. stock B trajectory)
+- Stochastic envelope plot (output of stochastic_run): median
+  trajectory with 10th/90th percentile band per scenario
+- Global sensitivity output: Sobol total-order indices bar chart
+  from SALib if more than 3 parameters are uncertain
+----
