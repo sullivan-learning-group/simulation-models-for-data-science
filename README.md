@@ -10,7 +10,7 @@ The book uses specification-driven development: you describe a simulation in a s
 |---|---|---|
 | [`ch04_monte_carlo/`](ch04_monte_carlo/) | Chapter 4: Using Monte Carlo Simulation to Model Uncertainty in Decision Making (Appendix A) | Monte Carlo specification template, specification interview prompt, coffee shop data and codebook, data generation and validation scripts, simulation script, simulation results |
 | [`ch05_discrete_event_simulation/`](ch05_discrete_event_simulation/) | Chapter 5: Finding and Fixing Process Bottlenecks with Discrete Event Simulation (Appendix B) | DES Templates A–C, completed coffee shop staffing specifications A–C, generated SimPy script |
-| [`ch06_system_dynamics/`](ch06_system_dynamics/) | Chapter 6: System dynamics (Appendix C) | System dynamics Templates A–C and completed coffee shop versions |
+| [`ch06_system_dynamics/`](ch06_system_dynamics/) | Chapter 6: Predicting System Behavior with System Dynamics (Appendix C) | SD Templates A–C, completed coffee shop loyalty and growth specifications A–C, generated Python script |
 | [`ch07_agent_based_modeling/`](ch07_agent_based_modeling/) | Chapter 7: Agent-based modeling (Appendix D) | Agent-based modeling Templates A–C and completed coffee shop versions |
 | [`ch11_communicating_results/`](ch11_communicating_results/) | Chapter 11: Driving adoption and action from simulation insights | Results and recommendations template; Monte Carlo dashboards built with Dash, Panel, and Streamlit |
 

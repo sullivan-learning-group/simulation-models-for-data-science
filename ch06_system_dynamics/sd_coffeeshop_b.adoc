@@ -1,20 +1,9 @@
-= SD Template B: Code Generation Prompt
+[[sd_coffeeshop_b]]
+=== SD Specification B: Coffee Shop Code Generation Prompt
 
-Paste your completed SD Template A into this prompt and hand it to your AI
-assistant.
+This is the completed SD Template B for the coffee shop loyalty and growth model in <<ch06>>. It was used with Claude Opus 5 to generate _coffee_shop_sd.py_.
 
-*Key difference from MC and DES Template B:* Requests an ODE-based model
-function compatible with `solve_ivp` rather than a sampling loop (MC) or SimPy
-event-driven code (DES). Scenario comparison involves parameter sweeps rather
-than replication-based confidence intervals.
-
-Template A carries the numbers, so this prompt no longer has to say "pick
-reasonable values." Sections 9 through 16 of the spec map onto specific
-functions below, and the generator should refuse to invent a value that the spec
-doesn't supply. If something is missing, the right response is to name the gap,
-not to fill it.
-
-----
+....
 Generate a system dynamics simulation in Python based on the
 following spec.
 
@@ -22,7 +11,8 @@ following spec.
 SYSTEM STRUCTURE SPEC
 ===============================================================
 
-[Paste completed SD Template A here]
+  *** Omitted for brevity. The contents of SD Specification A
+      goes here ***
 
 ===============================================================
 TECHNICAL REQUIREMENTS
@@ -145,7 +135,7 @@ Organize the code into these functions:
       and disabled, by setting the coupling parameter the spec
       names for that loop
     - Returns the change in the key output for each variation
-    - This is the input to Template C section 5c
+    - This is the input to Template C section 7c
 
 ===============================================================
 REQUIRED OUTPUTS
@@ -183,4 +173,4 @@ Optional (include if relevant):
   trajectory with 10th/90th percentile band per scenario
 - Global sensitivity output: Sobol total-order indices bar chart
   from SALib if more than 3 parameters are uncertain
-----
+....

@@ -3,6 +3,7 @@ pandas
 scipy
 matplotlib
 simpy
+SALib
 plotly
 dash
 panel

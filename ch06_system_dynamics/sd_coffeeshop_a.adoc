@@ -1,0 +1,325 @@
+[[sd_coffeeshop_a]]
+=== SD Specification A: Coffee Shop System Structure Spec
+
+This is the completed SD Template A for the coffee shop loyalty and growth model in <<ch06>>. It describes the model in both business language and equations, so a modeler and a shop owner can read the same document and come away with the same understanding of what is being simulated.
+
+Unlike the Monte Carlo and DES specifications, there are no distributions or individual entities here. The structure is carried by stocks, flows, feedback loops, and delays, and the behavior follows from the equations that connect them.
+
+==== 1. Business Question
+
+Primary: If we invest $15,000 in upgraded espresso equipment, how does that affect customer base and monthly revenue over 24 months? At what point does the investment pay for itself?
+
+Secondary: What happens if we raise prices by 10% simultaneously to offset the investment cost?
+
+==== 2. Time Horizon and Time Unit
+
+[options="header"]
+|===
+| Setting | Value | Notes
+| Model time unit | months | Every flow is units/month; every delay constant is in months
+| Horizon | 24 months |
+| Reporting interval | 0.1 month | Integration is continuous; this is the output grid
+| Conversion factor | 1 month = 4.33 weeks | Apply to anything stated in weeks before it reaches the solver
+| Discontinuity times | month 1.0, month 1.1 | Equipment step and price step land at 1.0; the investment pulse closes at 1.1
+|===
+
+==== 3. Reference Behavior
+
+[options="header"]
+|===
+| Observed quantity | Historical value | Source | Baseline must reproduce
+| Customer base | 380 to 420, flat for 18 months | Loyalty card actives | Stays within 10% of 400 through month 24
+| Monthly revenue | $8,500 to $9,200 | POS monthly totals | $8,500 to $10,000
+| Net cash flow | +$500 to $800/month | Bank statements | Positive, under $1,000/month
+| Customer churn | 6% to 8% of actives per month | Loyalty card lapse | Acquisition and churn within 2/month of each other at t = 0
+|===
+
+Intended baseline mode: flat to mildly growing. If the baseline grows past 500 customers or collapses below 350, the parameters are wrong, not the structure.
+
+==== 4. Assumptions
+
+No competitor response. Stable demographics. No external shocks. Equipment improves service quality immediately; reputation lags. The shop already runs at its maximum staffing of 4 baristas at t = 0, so any growth in the customer base raises utilization rather than triggering a hire.
+
+==== 5. Model Boundary
+
+[options="header"]
+|===
+| Variable / Driver | Treatment | Why
+| customer_base, brand_reputation, cash_reserves, satisfaction, word_of_mouth, churn_fraction, acquisition_rate, capacity, staff_fte | Endogenous | Inside the R1/B1/B2 loops; this is what the model is built to explain
+| base demand rate, equipment investment timing and amount, price level, staff_experience | Exogenous | Inputs the model takes as given or varies per scenario
+| Competitor entry or response, weather and seasonality, macroeconomic shifts, barista labor market | Excluded | Outside the boundary; surfaced as limitations in Template C
+|===
+
+==== 6. Stocks
+
+[options="header"]
+|===
+| Stock | Initial Value | Units | Initial value basis | Description
+| customer_base | 400 | customers | Measured (loyalty actives) | Active customers visiting at least once/month
+| brand_reputation | 76.5 | index 0 to 100 | Structural (set to its own equilibrium so the baseline starts at rest) | Lagged indicator of perceived quality
+| cash_reserves | 25,000 | USD | Measured (bank balance) | Available operating cash
+|===
+
+==== 7. Flows
+
+[options="header"]
+|===
+| Flow | Direction | Units | Driven By
+| acquisition_rate | Inflow to customer_base | customers/month | base_acquisition_effective + acquisition_from_wom
+| churn_rate | Outflow from customer_base | customers/month | customer_base × churn_fraction
+| revenue_inflow | Inflow to cash_reserves | USD/month | customer_base × visits_per_month × avg_transaction × (1 + price_change)
+| expense_outflow | Outflow from cash_reserves | USD/month | fixed_costs + variable_costs + investment_rate
+|===
+
+==== 8. Auxiliary Variables
+
+[options="header"]
+|===
+| Variable | Units | Depends On | Description
+| staff_capacity | customers/month | staff_fte, customers_per_fte | Throughput the current staffing supports
+| equipment_capacity | customers/month | equipment upgrade state | Throughput the machines support
+| capacity | customers/month | min(staff_capacity, equipment_capacity) | The binding constraint of the two
+| utilization | dimensionless | customer_base, capacity | customer_base / capacity
+| wait_time_pressure | index 0 to 1 | utilization | 0 when waits are negligible, 1 when waits drive customers away
+| service_quality_index | index 0 to 1 | equipment_level, staff_experience | Weighted blend of equipment and barista skill
+| perceived_value | index 0 to 1 | price_change | Falls as price rises above baseline; 1.0 at baseline price
+| satisfaction | index 0 to 1 | service_quality_index, wait_time_pressure, perceived_value | Feeds both word of mouth and churn
+| word_of_mouth | leads/month | customer_base, satisfaction | Raw lead generation, before delay and conversion
+| acquisition_from_wom | customers/month | smoothed word_of_mouth, conversion_rate | Output of the SMOOTH
+| base_acquisition_effective | customers/month | base_acquisition, brand_reputation | Walk-in acquisition, scaled by reputation
+| retention_effect | dimensionless | satisfaction, retention_strength | Clipped adjustment to churn
+| churn_fraction | 1/month | satisfaction, price_change | Monthly churn as a fraction of customer_base
+| reputation_target | index 0 to 100 | satisfaction | What reputation converges toward
+| desired_fte | FTE | customer_base, target_load_per_fte | Staffing the manager wants at current demand
+|===
+
+*Index anchoring.* equipment_level 0 means equipment that fails mid-shift, 1 means best in class for the segment. brand_reputation 0 means actively avoided, 100 means the best reviewed shop in town. satisfaction, perceived_value, and wait_time_pressure all run 0 to 1 with the endpoints given in the table above.
+
+==== 9. Parameters and Constants
+
+*Demand and retention*
+
+[options="header"]
+|===
+| Parameter | Value | Units | Basis | Plausible range
+| base_acquisition | 20 | customers/month | Measured (new loyalty signups) | 12 to 28
+| reference_reputation | 76.5 | index | Structural (normalizes the reputation effect at t = 0) | fixed
+| wom_coefficient | 0.06 | leads/customer/month at satisfaction 1 | Estimated | 0.03 to 0.10
+| conversion_rate | 0.25 | dimensionless | Estimated | 0.18 to 0.32
+| base_churn | 0.07 | 1/month | Measured (loyalty lapse rate) | 0.055 to 0.085
+| price_sensitivity | 1.5 | churn multiplier per unit price change | Estimated | 0.8 to 2.5
+| retention_strength | 0.8 | dimensionless | Structural | 0.5 to 1.1
+| satisfaction_reference | 0.60 | index | Structural (satisfaction at which churn equals base_churn) | fixed
+|===
+
+*Service quality*
+
+[options="header"]
+|===
+| Parameter | Value | Units | Basis | Plausible range
+| equipment_level_base | 0.60 | index 0 to 1 | Estimated | 0.45 to 0.70
+| equipment_level_upgraded | 0.90 | index 0 to 1 | Vendor specification | 0.80 to 0.95
+| staff_experience | 0.70 | index 0 to 1 | Estimated, held exogenous | 0.55 to 0.85
+| w_equipment | 0.65 | weight | Structural | 0.5 to 0.8
+| w_staff | 0.35 | weight | Structural | complement of w_equipment
+|===
+
+*Capacity*
+
+[options="header"]
+|===
+| Parameter | Value | Units | Basis | Plausible range
+| equipment_capacity_base | 520 | customers/month | Measured (peak throughput observed) | 480 to 560
+| equipment_capacity_upgraded | 700 | customers/month | Vendor specification | 640 to 760
+| customers_per_fte | 130 | customers/month/FTE | Measured (payroll against traffic) | 110 to 150
+| target_load_per_fte | 100 | customers/month/FTE | Policy (manager's staffing rule) | 85 to 120
+| max_fte | 4 | FTE | Constraint (floor space behind the bar) | fixed
+|===
+
+*Satisfaction and value*
+
+[options="header"]
+|===
+| Parameter | Value | Units | Basis | Plausible range
+| w_service | 0.6 | weight | Given in the satisfaction equation | 0.5 to 0.7
+| w_wait | 0.3 | weight | Given in the satisfaction equation | 0.2 to 0.4
+| w_value | 0.1 | weight | Given in the satisfaction equation | 0.05 to 0.2
+| value_sensitivity | 2.0 | perceived value lost per unit price change | Estimated | 1.0 to 3.0
+|===
+
+*Financial*
+
+[options="header"]
+|===
+| Parameter | Value | Units | Basis | Plausible range
+| visits_per_month | 4.0 | visits/customer/month | Measured (POS) | 3.5 to 4.5
+| avg_transaction | 5.50 | USD/visit | Measured (POS) | 5.20 to 5.80
+| fixed_costs | 5,000 | USD/month | Measured (rent, utilities, base payroll) | 4,700 to 5,300
+| variable_cost_fraction | 0.35 | share of revenue | Measured (COGS) | 0.30 to 0.40
+|===
+
+==== 10. Nonlinear Relationships
+
+[options="header"]
+|===
+| Relationship | Form | Anchor points | Basis
+| wait_time_pressure(utilization) | Linear ramp, clipped to [0, 1] | 0.75 → 0.0, 0.925 → 0.5, 1.10 → 1.0 | Structural; threshold set where queue complaints begin in review text
+| perceived_value(price_change) | Linear decline, clipped to [0, 1] | 0.0 → 1.0, +0.10 → 0.80, +0.50 → 0.0 | Estimated
+| retention_effect(satisfaction) | Linear in (satisfaction − 0.60), clipped to [−0.5, +0.6] | 0.35 → −0.2, 0.60 → 0.0, 0.85 → +0.2 | Structural; clip prevents churn from going negative
+| base_acquisition_effective(brand_reputation) | Proportional to reputation / 76.5 | 38.3 → 0.5×, 76.5 → 1.0×, 100 → 1.31× | Structural
+|===
+
+==== 11. Constraints and Ceilings
+
+[options="header"]
+|===
+| Constraint | Rule | Rationale
+| Staffing ceiling | staff_fte ≤ 4 | Floor space behind the bar caps hiring
+| Capacity is the binding limit | capacity = min(staff_capacity, equipment_capacity) | Buying throughput you can't staff buys nothing
+| Non-negativity | customer_base ≥ 0, capacity ≥ 1 | Prevents division by zero and nonsense states
+| Index bounds | satisfaction, perceived_value, wait_time_pressure ∈ [0, 1] | Clip after every computation
+| Churn floor | churn_fraction > 0 | The retention clip in section 10 enforces this
+|===
+
+==== 12. Feedback Loops
+
+----
+R1 (Growth engine): customer_base → satisfaction → word_of_mouth →
+   (SMOOTH) → acquisition_rate → customer_base, reinforced by
+   satisfaction → brand_reputation → base_acquisition_effective
+   Plain language: More satisfied customers bring more customers.
+
+B1 (Capacity constraint): customer_base → utilization →
+   wait_time_pressure → satisfaction → churn_rate → customer_base
+   Plain language: Growth increases congestion, which pushes customers
+   away. The natural brake.
+
+B2 (Price sensitivity): price_change → perceived_value → satisfaction
+   → churn_rate, plus a direct multiplier on churn_fraction
+   Plain language: A management lever that weakens R1 in exchange for
+   margin.
+----
+
+*Expected loop dominance.*
+
+[options="header"]
+|===
+| Phase | Expected dominant loop | Why
+| Months 0 to 6 | R1 | Quality improvement lands immediately; utilization is still near 0.77 and congestion is mild
+| Months 6 to 18 | R1, weakening | Word of mouth compounds while utilization climbs toward the 520 ceiling
+| Months 18 to 24 | B1 at parity | The customer base presses against the 520 capacity ceiling and growth flattens
+|===
+
+If the run doesn't show B1 gaining on R1 by month 24, either the capacity parameters are too generous or the congestion ramp starts too late.
+
+==== 13. Delays
+
+[options="header"]
+|===
+| Delay | Type | Duration (weeks) | Duration (months) | Implementation | Initial value of the delay stock
+| Word of mouth | Information | 6 | 1.39 | SMOOTH, 1st order | Equilibrium: customer_base × satisfaction × wom_coefficient × conversion_rate = 4.6 customers/month
+| Reputation adjustment | Information | 8 | 1.85 | SMOOTH, 1st order | 76.5, the equilibrium reputation from section 6
+| Hiring response | Material | 3 | 0.69 | SMOOTH, 1st order | customer_base / target_load_per_fte = 4.0 FTE, already at the ceiling
+|===
+
+==== 14. Equations
+
+Model time unit: months. All flows are units/month; all SMOOTH constants are in months. Every symbol below resolves to a stock, an auxiliary from section 8, or a parameter from section 9.
+
+----
+staff_capacity        = staff_fte × customers_per_fte
+capacity              = max(min(staff_capacity, equipment_capacity), 1)
+utilization           = customer_base / capacity
+wait_time_pressure    = clip((utilization − 0.75) / 0.35, 0, 1)
+service_quality_index = w_equipment × equipment_level
+                      + w_staff × staff_experience
+perceived_value       = clip(1 − value_sensitivity × price_change, 0, 1)
+satisfaction          = clip(w_service × service_quality_index
+                        + w_wait × (1 − wait_time_pressure)
+                        + w_value × perceived_value, 0, 1)
+word_of_mouth         = customer_base × satisfaction × wom_coefficient
+acquisition_from_wom  = SMOOTH(word_of_mouth × conversion_rate, wom_delay)
+base_acquisition_effective = base_acquisition
+                           × (brand_reputation / reference_reputation)
+                           × demand_multiplier
+acquisition_rate      = base_acquisition_effective + acquisition_from_wom
+retention_effect      = clip(retention_strength
+                        × (satisfaction − satisfaction_reference), −0.5, 0.6)
+churn_fraction        = base_churn
+                      × (1 + price_sensitivity × price_change)
+                      × (1 − retention_effect)
+churn_rate            = customer_base × churn_fraction
+revenue_inflow        = customer_base × visits_per_month × avg_transaction
+                        × (1 + price_change)
+expense_outflow       = fixed_costs
+                      + variable_cost_fraction × revenue_inflow
+                      + investment_rate
+reputation_target     = 100 × satisfaction
+desired_fte           = clip(customer_base / target_load_per_fte, 0.5, max_fte)
+----
+
+Stock equations:
+
+----
+d(customer_base)/dt    = acquisition_rate − churn_rate
+d(brand_reputation)/dt = (reputation_target − brand_reputation) / reputation_delay
+d(cash_reserves)/dt    = revenue_inflow − expense_outflow
+d(staff_fte)/dt        = (desired_fte − staff_fte) / hiring_delay
+d(wom_smoothed)/dt     = (word_of_mouth × conversion_rate − wom_smoothed) / wom_delay
+----
+
+==== 15. Exogenous Inputs and Policy Timing
+
+[options="header"]
+|===
+| Input | Shape | Timing | Magnitude | What it changes
+| Equipment investment (cash) | Pulse, width 0.1 month | Month 1.0 | $15,000 total, so investment_rate = $150,000/month across the pulse | expense_outflow spikes, then returns
+| Equipment upgrade (capability) | Step, permanent | Month 1.0 | equipment_level 0.60 → 0.90; equipment_capacity 520 → 700 | service_quality_index and capacity
+| Price increase | Step, permanent | Month 1.0 | +10% | revenue multiplier, perceived_value, churn_fraction
+| demand_multiplier | Constant | All months | 1.0 in deterministic runs | Hook for the stochastic runs in section 16
+|===
+
+Solver note for Template B: integrate in three segments, 0 to 1.0, 1.0 to 1.1, and 1.1 to 24, so both steps and both pulse edges land on segment boundaries. Inside the pulse segment hold max_step to 0.025 month, which gives the solver four evaluations across the 0.1 month pulse.
+
+==== 16. Uncertainty Specification
+
+Sampled in the stochastic runs:
+
+[options="header"]
+|===
+| Parameter | Distribution | Rationale
+| wom_delay | Uniform(4, 8) weeks | The 6 week figure is a midpoint, not a measurement
+| demand_multiplier | Lognormal(0, 0.15) | Month to month demand noise
+| base_churn | Normal(0.07, 0.008) | Measured, but with real sampling variation
+| conversion_rate | Uniform(0.18, 0.32) | Estimated, wide
+|===
+
+Sobol bounds for global sensitivity (nine parameters, total-order indices): base_acquisition [12, 28], target_load_per_fte [85, 120], customers_per_fte [110, 150], wom_coefficient [0.03, 0.10], conversion_rate [0.18, 0.32], base_churn [0.055, 0.085], price_sensitivity [0.8, 2.5], wom_delay [0.92, 1.85] months, retention_strength [0.5, 1.1].
+
+Held fixed and why: the financial parameters all come from POS and bank records, so they carry little uncertainty relative to the behavioral ones. The structural weights stay fixed because sampling them would test the structure rather than the parameters, which is a Template C question.
+
+==== 17. Closure Checklist
+
+- Every symbol in section 14 resolves to a stock, an auxiliary in section 8, or a parameter in section 9. No dangling references.
+- Every name in the Depends On column of section 8 resolves the same way.
+- Every parameter has a value, units, a basis, and a plausible range.
+- Every 0 to 1 or 0 to 100 index has its endpoints anchored in words.
+- Every saturating or threshold relationship has a functional form and three anchor points.
+- Every delay has a duration in model time units and an initial value for its stock.
+- Dimensional check: every flow is units/month, every delay constant is in months, and both sides of every equation carry the same units.
+- At least one balancing loop has a hard ceiling behind it. B1 sits behind the 4 FTE staffing ceiling.
+- Every lever in the scenario table has a shape, a time, and a magnitude.
+- The global sensitivity set in section 16 includes every parameter the OAT sweep ranks in the top five.
+- The baseline scenario reproduces the reference behavior in section 3: customer base 400 to 402, revenue $8,840/month at month 24, net cash $740/month, acquisition 24.6 against churn 24.3 at t = 0.
+- Parameters marked Structural and carried to Template C: reference_reputation, retention_strength, satisfaction_reference, w_equipment, w_staff, the initial value of brand_reputation, and all four nonlinear relationships in section 10.
+
+==== 18. Scenarios
+
+[options="header"]
+|===
+| Scenario | Equipment Investment | Price Change | Description
+| Baseline | None | 0% | Current trajectory; must reproduce section 3
+| A: Invest only | $15,000 pulse at month 1.0 | 0% | Quality improvement, no price change
+| B: Price only | None | +10% step at month 1.0 | Margin improvement, no quality change
+| C: Invest + price | $15,000 pulse at month 1.0 | +10% step at month 1.0 | Both levers simultaneously
+|===
